@@ -1,0 +1,10 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: img-resize-cache
+spec:
+  template:
+    spec:
+      containers:
+        - name: authz
+          image: ghcr.io/your-org/img-resize-cache-authz:0.0.0

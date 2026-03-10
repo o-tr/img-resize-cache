@@ -1,0 +1,51 @@
+name: Docker (authz)
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "authz/**"
+      - "authz/Dockerfile"
+      - ".github/workflows/docker-authz.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and push authz image
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: authz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image name
+        id: meta
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/img-resize-cache-authz"
+          TAG_SHA="${GITHUB_SHA::7}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=${TAG_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./authz
+          file: ./authz/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag_sha }}
+            ${{ steps.meta.outputs.image }}:latest

@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: img-resize-cache
+spec:
+  template:
+    spec:
+      containers:
+        - name: ssh-socks
+          env:
+            - name: SSH_HOST
+              value: "bastion.your-domain.example"
+            - name: SSH_PORT
+              value: "22"
+            - name: SSH_USER
+              value: "your-user"
+      volumes:
+        - name: ssh-keys
+          secret:
+            secretName: ssh-socks-secret

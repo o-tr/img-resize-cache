@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: img-resize-cache-nginx
+data:
+  nginx.conf: |
+    worker_processes  1;
+
+    events {
+      worker_connections  1024;
+    }
+
+    http {
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+
+      sendfile        on;
+      tcp_nopush      on;
+      tcp_nodelay     on;
+      keepalive_timeout  65;
+
+      # Cache: stored on tmpfs mounted at /var/cache/nginx
+      proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=imgcache:10m max_size=512m inactive=60m use_temp_path=off;
+
+      # Rate limit: per client IP, per pod
+      limit_req_zone $binary_remote_addr zone=perip:10m rate=6r/m;
+      limit_req_status 429;
+
+      # Extract full URL from "/<image-url>" path
+      map $request_uri $src_url {
+        ~^/(.+)$ $1;
+        default "";
+      }
+
+      server {
+        listen 8080;
+
+        # Basic health endpoint
+        location = /healthz {
+          return 200 "ok\n";
+          add_header Content-Type text/plain;
+        }
+
+        # Subrequest for auth_request. Returns 204 when allowed, 403 when denied.
+        location = /__authz {
+          internal;
+          proxy_pass http://127.0.0.1:9000/check;
+          proxy_set_header X-Source-Url $src_url;
+          proxy_set_header X-Request-Id $request_id;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header Host $host;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+        }
+
+        # auth_request uses 401/403 for denial. Map 403 to 400 as required.
+        location = /__bad_request {
+          internal;
+          return 400;
+        }
+
+        location / {
+          auth_request /__authz;
+          error_page 403 =400 /__bad_request;
+
+          # Enforce per-IP rate limit (burst allows short spikes)
+          limit_req zone=perip burst=6 nodelay;
+
+          # Cache successful image responses
+          proxy_cache imgcache;
+          proxy_cache_key "$scheme$host$request_uri";
+          proxy_cache_valid 200 1h;
+
+          add_header X-Cache-Status $upstream_cache_status always;
+
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+
+          # Pass-through to imgproxy with fixed transform:
+          # /unsafe/rs:fit:2048:2048/plain/<full-url>
+          set $imgproxy_path "/unsafe/rs:fit:2048:2048/plain/$src_url";
+          proxy_pass http://127.0.0.1:8081$imgproxy_path;
+
+          proxy_http_version 1.1;
+          proxy_read_timeout 60s;
+          proxy_send_timeout 60s;
+        }
+      }
+    }

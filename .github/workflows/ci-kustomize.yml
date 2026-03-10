@@ -1,0 +1,39 @@
+name: CI (Kustomize)
+
+on:
+  pull_request:
+    paths:
+      - "kustomize/**"
+      - ".github/workflows/ci-kustomize.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "kustomize/**"
+      - ".github/workflows/ci-kustomize.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  kustomize:
+    name: Kustomize (build + dry-run)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.34.1
+
+      - name: Build kustomize/base
+        run: |
+          kubectl kustomize kustomize/base > /tmp/base.yaml
+          kubectl apply --dry-run=client -f /tmp/base.yaml >/dev/null
+
+      - name: Build kustomize/overlays/example
+        run: |
+          kubectl kustomize kustomize/overlays/example > /tmp/example.yaml
+          kubectl apply --dry-run=client -f /tmp/example.yaml >/dev/null

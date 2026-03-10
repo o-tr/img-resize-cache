@@ -1,0 +1,155 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: img-resize-cache
+spec:
+  revisionHistoryLimit: 1
+  replicas: 2
+  selector:
+    matchLabels:
+      app: img-resize-cache
+  template:
+    metadata:
+      labels:
+        app: img-resize-cache
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "0.05"
+              memory: 128Mi
+            limits:
+              cpu: "0.25"
+              memory: 256Mi
+
+        - name: authz
+          image: ghcr.io/o-tr/img-resize-cache-authz:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9000
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9000
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "0.02"
+              memory: 32Mi
+            limits:
+              cpu: "0.2"
+              memory: 64Mi
+
+        - name: imgproxy
+          image: darthsim/imgproxy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          env:
+            - name: IMGPROXY_BIND
+              value: ":8081"
+            - name: IMGPROXY_USE_ETAG
+              value: "true"
+            - name: IMGPROXY_USE_LAST_MODIFIED
+              value: "true"
+            - name: IMGPROXY_USE_SIGNATURES
+              value: "false"
+            - name: IMGPROXY_MAX_SRC_RESOLUTION
+              value: "200"
+            - name: IMGPROXY_DOWNLOAD_TIMEOUT
+              value: "30"
+            - name: HTTP_PROXY
+              value: "socks5://127.0.0.1:1080"
+            - name: HTTPS_PROXY
+              value: "socks5://127.0.0.1:1080"
+            - name: NO_PROXY
+              value: "localhost,127.0.0.1"
+          resources:
+            requests:
+              cpu: "0.1"
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+
+        - name: ssh-socks
+          image: alpine:3.21
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SSH_HOST
+              value: "bastion.example.com"
+            - name: SSH_PORT
+              value: "22"
+            - name: SSH_USER
+              value: "user"
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              apk add --no-cache openssh-client
+              chmod 600 /ssh/id_rsa
+              exec ssh \
+                -N \
+                -D 127.0.0.1:1080 \
+                -p "${SSH_PORT}" \
+                -i /ssh/id_rsa \
+                -o UserKnownHostsFile=/ssh/known_hosts \
+                -o StrictHostKeyChecking=yes \
+                -o ExitOnForwardFailure=yes \
+                -o ServerAliveInterval=30 \
+                -o ServerAliveCountMax=3 \
+                "${SSH_USER}@${SSH_HOST}"
+          volumeMounts:
+            - name: ssh-keys
+              mountPath: /ssh
+              readOnly: true
+          resources:
+            requests:
+              cpu: "0.02"
+              memory: 32Mi
+            limits:
+              cpu: "0.2"
+              memory: 64Mi
+
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: img-resize-cache-nginx
+        - name: nginx-cache
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+        - name: ssh-keys
+          secret:
+            secretName: ssh-socks-secret

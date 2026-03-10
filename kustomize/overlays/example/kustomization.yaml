@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: img-resize-cache
+    path: patch-deployment-env.yaml
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: img-resize-cache
+    path: patch-images.yaml
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: img-resize-cache
+    path: patch-replicas.yaml

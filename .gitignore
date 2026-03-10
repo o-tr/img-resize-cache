@@ -1,0 +1,29 @@
+### OS / エディタ
+.DS_Store
+.vscode/
+.idea/
+
+### Go ビルド成果物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# `go build` / `go test` などの出力ディレクトリ想定
+bin/
+build/
+dist/
+coverage/
+
+### ログ・一時ファイル
+*.log
+tmp/
+
+### ツール関連
+*.cache
+**/.golangci.json
+**/.golangci-report.*
+
