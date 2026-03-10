@@ -10,10 +10,6 @@ on:
       - ".github/workflows/docker-authz.yml"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   build-and-push:
     name: Build and push authz image
