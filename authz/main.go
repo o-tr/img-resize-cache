@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -20,11 +22,41 @@ const (
 	headerSourceURL = "X-Source-Url"
 )
 
+var allowedUserAgentPatterns []*regexp.Regexp
+
+func init() {
+	raw := strings.TrimSpace(os.Getenv("AUTHZ_ALLOWED_USER_AGENT_PATTERNS"))
+	if raw == "" {
+		log.Printf("no AUTHZ_ALLOWED_USER_AGENT_PATTERNS configured; user-agent whitelist is disabled")
+		return
+	}
+	for _, part := range strings.Split(raw, ",") {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		re, err := regexp.Compile(p)
+		if err != nil {
+			log.Printf("failed to compile user-agent pattern %q: %v", p, err)
+			continue
+		}
+		allowedUserAgentPatterns = append(allowedUserAgentPatterns, re)
+	}
+	if len(allowedUserAgentPatterns) == 0 {
+		log.Printf("no valid AUTHZ_ALLOWED_USER_AGENT_PATTERNS compiled; user-agent whitelist is disabled")
+	}
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc(checkPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			deny(w, fmt.Errorf("method not allowed: %s", r.Method))
+			return
+		}
+
+		if err := validateUserAgent(r.UserAgent()); err != nil {
+			deny(w, err)
 			return
 		}
 
@@ -63,6 +95,20 @@ func main() {
 func deny(w http.ResponseWriter, err error) {
 	log.Printf("deny: %v", err)
 	w.WriteHeader(http.StatusForbidden) // nginx maps this to 400
+}
+
+func validateUserAgent(ua string) error {
+	ua = strings.TrimSpace(ua)
+	// If no patterns are configured, do not enforce a whitelist to preserve existing behavior.
+	if len(allowedUserAgentPatterns) == 0 {
+		return nil
+	}
+	for _, re := range allowedUserAgentPatterns {
+		if re.MatchString(ua) {
+			return nil
+		}
+	}
+	return errors.New("user-agent not allowed")
 }
 
 func validateSourceURL(ctx context.Context, raw string) error {
