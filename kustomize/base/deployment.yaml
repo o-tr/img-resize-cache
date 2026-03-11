@@ -47,7 +47,7 @@ spec:
               memory: 256Mi
 
         - name: authz
-          image: ghcr.io/o-tr/img-resize-cache-authz:latest
+          image: ghcr.io/o-tr/img-resize-cache:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9000
