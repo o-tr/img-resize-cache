@@ -106,6 +106,8 @@ spec:
         - name: ssh-socks
           image: alpine:3.21
           imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 1080
           env:
             - name: SSH_HOST
               value: "bastion.example.com"
@@ -113,6 +115,18 @@ spec:
               value: "22"
             - name: SSH_USER
               value: "user"
+          livenessProbe:
+            tcpSocket:
+              port: 1080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 1080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            failureThreshold: 3
           command:
             - /bin/sh
             - -ec
@@ -124,7 +138,7 @@ spec:
               chmod 600 /tmp/ssh/id_rsa
               exec ssh \
                 -N \
-                -D 127.0.0.1:1080 \
+                -D 0.0.0.0:1080 \
                 -p "${SSH_PORT}" \
                 -i /tmp/ssh/id_rsa \
                 -o UserKnownHostsFile=/tmp/ssh/known_hosts \
