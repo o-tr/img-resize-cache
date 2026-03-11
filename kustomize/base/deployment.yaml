@@ -48,7 +48,7 @@ spec:
 
         - name: authz
           image: ghcr.io/o-tr/img-resize-cache:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 9000
           livenessProbe:
@@ -73,7 +73,7 @@ spec:
 
         - name: imgproxy
           image: darthsim/imgproxy:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8081
           env:
