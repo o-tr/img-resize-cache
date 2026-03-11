@@ -32,6 +32,39 @@ data:
         default "";
       }
 
+      # Escaped variant of $src_url for imgproxy path only.
+      # - Go(authz) には元の $src_url をそのまま渡す
+      # - imgproxy には % / ? / @ をそれぞれ %25 / %3F / %40 にエンコードした値を渡す
+      #
+      # Nginx には汎用のエスケープ関数がないため、正規表現の map を段階的に適用して
+      # 末尾側から複数回置換する形を取っている（一般的な URL であれば十分にカバー可能）。
+      map $src_url $src_url_pct_1 {
+        "~(?<pre>.*)%(?<post>.*)" "$pre%25$post";
+        default $src_url;
+      }
+      map $src_url_pct_1 $src_url_pct_2 {
+        "~(?<pre>.*)%(?<post>.*)" "$pre%25$post";
+        default $src_url_pct_1;
+      }
+
+      map $src_url_pct_2 $src_url_q_1 {
+        "~(?<pre>.*)\?(?<post>.*)" "$pre%3F$post";
+        default $src_url_pct_2;
+      }
+      map $src_url_q_1 $src_url_q_2 {
+        "~(?<pre>.*)\?(?<post>.*)" "$pre%3F$post";
+        default $src_url_q_1;
+      }
+
+      map $src_url_q_2 $src_url_at_1 {
+        "~(?<pre>.*)@(?<post>.*)" "$pre%40$post";
+        default $src_url_q_2;
+      }
+      map $src_url_at_1 $src_url_escaped {
+        "~(?<pre>.*)@(?<post>.*)" "$pre%40$post";
+        default $src_url_at_1;
+      }
+
       server {
         listen 8080;
 
@@ -81,7 +114,8 @@ data:
 
           # Pass-through to imgproxy with fixed transform:
           # /unsafe/rs:fit:2048:2048/plain/<full-url>
-          set $imgproxy_path "/unsafe/rs:fit:2048:2048/plain/$src_url";
+          # Go(authz) には生の $src_url を渡しつつ、imgproxy にはエスケープ済みの URL を渡す。
+          set $imgproxy_path "/unsafe/rs:fit:2048:2048/plain/$src_url_escaped";
           proxy_pass http://127.0.0.1:8081$imgproxy_path;
 
           proxy_http_version 1.1;
