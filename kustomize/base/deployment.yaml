@@ -118,13 +118,16 @@ spec:
             - -ec
             - |
               apk add --no-cache openssh-client
-              chmod 600 /ssh/id_rsa
+              mkdir -p /tmp/ssh
+              cp /ssh/id_rsa /tmp/ssh/id_rsa
+              cp /ssh/known_hosts /tmp/ssh/known_hosts
+              chmod 600 /tmp/ssh/id_rsa
               exec ssh \
                 -N \
                 -D 127.0.0.1:1080 \
                 -p "${SSH_PORT}" \
-                -i /ssh/id_rsa \
-                -o UserKnownHostsFile=/ssh/known_hosts \
+                -i /tmp/ssh/id_rsa \
+                -o UserKnownHostsFile=/tmp/ssh/known_hosts \
                 -o StrictHostKeyChecking=yes \
                 -o ExitOnForwardFailure=yes \
                 -o ServerAliveInterval=30 \
