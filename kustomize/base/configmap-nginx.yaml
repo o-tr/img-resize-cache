@@ -112,6 +112,10 @@ data:
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
           proxy_set_header X-Forwarded-Proto $scheme;
 
+          # Hide imgproxy's Cache-Control which lets the browser cache the image without auth
+          proxy_hide_header Cache-Control;
+          add_header Cache-Control "private, no-cache, no-store, must-revalidate";
+
           # Pass-through to imgproxy with fixed transform:
           # /unsafe/rs:fit:2048:2048/plain/<full-url>
           # Go(authz) には生の $src_url を渡しつつ、imgproxy にはエスケープ済みの URL を渡す。
